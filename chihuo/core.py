@@ -7,22 +7,29 @@ from .signal_handlers import set_signal_handlers
 logger = logging.getLogger(__name__)
 
 
-def run(*classes):
-    if not classes:
-        logger.error("No provide factory class")
+def run(*classes_or_instances):
+    if not classes_or_instances:
+        logger.error("No provide factory class or instance")
 
-    assert classes, "No provide factory class"
+    assert classes_or_instances, "No provide factory class or instance"
 
     factories = []
-    for clz in classes:
-        if type(clz) is not type:
-            raise TypeError("factory must be a class")
-        if not issubclass(clz, ChihuoLoop):
-            raise TypeError("factory must be a subclass of ChihuoLoop")
-        if clz.NAME is None:
-            raise TypeError("factory.NAME must be given")
+    for obj in classes_or_instances:
+        if isinstance(obj, ChihuoLoop):
+            if obj.NAME is None:
+                raise TypeError("factory.NAME must be given")
+            factories.append(obj)
+        else:
+            if type(obj) is not type:
+                raise TypeError("factory must be a class or instance of ChihuoLoop")
+            if not issubclass(obj, ChihuoLoop):
+                raise TypeError(
+                    "factory must be a subclass of ChihuoLoop or instance of ChihuoLoop"
+                )
+            if obj.NAME is None:
+                raise TypeError("factory.NAME must be given")
 
-        factories.append(clz())
+            factories.append(obj())
 
     logger.info("Find factories: %s", [factory.NAME for factory in factories])
 
