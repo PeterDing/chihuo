@@ -7,7 +7,7 @@ import types
 from .server import Server
 from .common import SERVER_DEFAULT_CONFIG_PATH, ChihuoType, Direction
 from .config import parse_server_config
-from .util import make_ctrl_queue, serialize_json
+from .util import serialize_json
 
 logger = logging.getLogger(__name__)
 
@@ -70,7 +70,7 @@ Initiate %s loop:
 
         self._server_config = parse_server_config(self.SERVER_CONFIG)
         self._server = Server(self.NAME, self._server_config, loop=self._loop)
-        self.__ctrl_queue = make_ctrl_queue(self.CONCURRENCY, loop=self._loop)
+        self._semaphore = asyncio.locks.Semaphore(self.CONCURRENCY, loop=self._loop)
 
         # Running task ids cache
         self._task_ids = set()
@@ -96,7 +96,7 @@ Initiate %s loop:
     @concurrency.setter
     def concurrency(self, concurrency):
         self._concurrency = concurrency
-        self.__ctrl_queue = make_ctrl_queue(concurrency, loop=self._loop)
+        self._semaphore = asyncio.locks.Semaphore(self.CONCURRENCY, loop=self._loop)
 
     def _create_task(self, task, task_type=None):
         """Wrap `loop.create_task`
@@ -147,17 +147,13 @@ Initiate %s loop:
                 logger.debug("%s: task_loop stop", self.__clz_name)
                 return
 
-            await self.__ctrl_queue.get()
-
-            if self._stop:
-                logger.debug("%s: task_loop stop", self.__clz_name)
-                return
+            await self._semaphore.acquire()
 
             task_id, task = await self.next_task()
             if task_id is None and task is None:
                 await self.sleep(1)
                 # Release the task
-                await self.release()
+                self.release()
                 continue
 
             future = self._create_task(
@@ -189,6 +185,9 @@ Initiate %s loop:
                 err,
                 traceback.format_exc(),
             )  # yapf: disable
+        finally:
+            # Release the semaphore for a completed task
+            self.release()
 
     async def add_task(
         self, *pairs, finished=True, ignore_running=False, direction=Direction.Forward
@@ -248,16 +247,13 @@ Initiate %s loop:
 
         await self._server.unfinish(task_id)
 
-    async def release(self):
-        # If ctrl_queue is not full, we put a chance to it.
-        # When self._stop_task_loop is fired, ctrl_queue can be full.
-        if not self.__ctrl_queue.full():
-            await self.__ctrl_queue.put(1)
+    def release(self):
+        self._semaphore.release()
 
     def length(self):
         """How many tasks are there"""
 
-        return self._concurrency - self.__ctrl_queue.qsize()
+        return self._concurrency - self._semaphore._value
 
     async def sleep(self, second):
         await asyncio.sleep(second, loop=self._loop)
