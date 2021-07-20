@@ -75,9 +75,6 @@ class MyTasksA(ChihuoLoop):
         # Talk chihuo that the task is finished
         await self.task_finish(i)
 
-        # Release the task
-        await self.release()
-
 
 class MyTasksB(ChihuoLoop):
 
@@ -98,9 +95,6 @@ class MyTasksB(ChihuoLoop):
 
         # Talk chihuo that the task is finished
         await self.task_finish(i)
-
-        # Release the task
-        await self.release()
 
 
 if __name__ == '__main__':
