@@ -1,10 +1,20 @@
 # Changelog
 
+## v0.2.1 - 2021-07-23
+
+### Fixed
+
+- Adding fail tasks back is needed `ignore_running=True`.
+
+### Changed
+
+- `chihuo.util.aretry(times=-1)` lets to retry forever.
+
 ## v0.2.0 - 2021-07-20
 
 ### Added
 
-- `chihun.run` adapts any instance of ChihuoLoop.
+- `chihuo.run` adapts any instance of ChihuoLoop.
 
 ### Changed
 
