@@ -174,12 +174,12 @@ Initiate %s loop:
             await self.make_task(task_id, task)
         except asyncio.CancelledError:
             await self.add_task(
-                (task_id, task), ignore_running=True, direction=Direction.Reverse
+                (task_id, task), ignore_running=False, direction=Direction.Reverse
             )
             logger.error("task fail: %s: CancelledError: %s", self.__clz_name, task)
         except Exception as err:
             await self.add_task(
-                (task_id, task), ignore_running=True, direction=Direction.Reverse
+                (task_id, task), ignore_running=False, direction=Direction.Reverse
             )
             logger.error(
                 "task fail: %s, task_id: %s, task: %s, error: %s, traceback: %s",
