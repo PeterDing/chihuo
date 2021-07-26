@@ -1,5 +1,16 @@
 # Changelog
 
+## v0.2.2 - 2021-07-23
+
+### Fixed
+
+- Adding fail tasks back is needed `ignore_running=False`.
+
+  `ignore_running`: bool
+
+  if `ignore_running` is true, the task will be added to the task queue
+  only if there is not a task which is running with same task_id
+
 ## v0.2.1 - 2021-07-23
 
 ### Fixed

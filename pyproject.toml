@@ -1,7 +1,7 @@
 [tool.poetry]
 name = "chihuo"
 homepage = "https://github.com/PeterDing/chihuo"
-version = "0.2.1"
+version = "0.2.2"
 description = "chihuo: An Asynchronous Task Running Engine"
 authors = ["PeterDing <dfhayst@gmail.com>"]
 license = "MIT"
@@ -17,7 +17,7 @@ classifiers = [
 
 [tool.poetry.dependencies]
 python = "^3.7"
-lodis-py = "^0.1.0"
+lodis-py = "^0.2.0"
 
 [tool.poetry.dev-dependencies]
 
