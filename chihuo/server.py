@@ -65,6 +65,10 @@ class Server(Wrapper):
         return await self._server.pop()
 
     @handle_exception
+    async def size(self):
+        return await self._server.size()
+
+    @handle_exception
     async def finish(self, *keys):
         return await self._server.finish(*keys)
 

@@ -40,6 +40,11 @@ class Wrapper(ABC):
         raise NotImplementedError
 
     @abstractmethod
+    async def size(self):
+        """The size of the queue"""
+        raise NotImplementedError
+
+    @abstractmethod
     async def finish(self, key):
         """Set the task which has the key to finished"""
         raise NotImplementedError
@@ -80,6 +85,9 @@ class LodisWrapper(Wrapper):
 
     async def pop(self):
         return await self._lodis.arpop()
+
+    async def size(self):
+        return await self._lodis.alen()
 
     # Map
     async def finish(self, *keys):
