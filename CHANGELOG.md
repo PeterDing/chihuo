@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.2.3 - 2021-09-22
+
+### Added
+
+- Support to check the end event there is no running task and the size of task queue is 0.
+
 ## v0.2.2 - 2021-07-23
 
 ### Fixed
