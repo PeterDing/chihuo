@@ -46,7 +46,7 @@ class ChihuoLoop:
     CONCURRENCY = 1
     SERVER_CONFIG = SERVER_DEFAULT_CONFIG_PATH
 
-    def __init__(self):
+    def __init__(self, run_forever=True):
         if not self.NAME:
             logger.warning("NAME is missing")
 
@@ -75,7 +75,12 @@ Initiate %s loop:
         # Running task ids cache
         self._task_ids = set()
 
+        # Count the running tasks
+        self._lock = asyncio.Lock()
+        self._running_tasks_count = 0
+
         self._stop = False
+        self._run_forever = run_forever
 
     @property
     def __clz_name(self):
@@ -129,10 +134,13 @@ Initiate %s loop:
         raise NotImplementedError("ChihuoLoop.make_task must be implemented")
 
     async def next_task(self):
-        resp = await self._server.pop_left()
-        value = resp.value()
-        if not value:
-            return None, None
+        async with self._lock:
+            resp = await self._server.pop_left()
+            value = resp.value()
+            if not value:
+                return None, None
+
+            self._running_tasks_count += 1
 
         task_id, raw_task = value
         task = stdjson.loads(raw_task)
@@ -153,7 +161,7 @@ Initiate %s loop:
             if task_id is None and task is None:
                 await self.sleep(1)
                 # Release the task
-                self.release()
+                self._release()
                 continue
 
             future = self._create_task(
@@ -191,7 +199,17 @@ Initiate %s loop:
             )  # yapf: disable
         finally:
             # Release the semaphore for a completed task
-            self.release()
+            self._release()
+
+        async with self._lock:
+            self._running_tasks_count -= 1
+
+            # The end event: running tasks is empty and the task queue is empty
+            if not self._run_forever and self._running_tasks_count == 0:
+                resp = await self._server.size()
+                size = resp.value()
+                if size == 0:
+                    self._loop.stop()
 
     async def add_task(
         self, *pairs, finished=True, ignore_running=False, direction=Direction.Forward
@@ -251,7 +269,7 @@ Initiate %s loop:
 
         await self._server.unfinish(task_id)
 
-    def release(self):
+    def _release(self):
         self._semaphore.release()
 
     def length(self):
