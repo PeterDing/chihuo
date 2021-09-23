@@ -79,3 +79,11 @@ class Server(Wrapper):
     @handle_exception
     async def unfinish(self, key):
         return await self._server.unfinish(key)
+
+    @handle_exception
+    async def clear_unfinished_tasks(self):
+        return await self._server.clear_unfinished_tasks()
+
+    @handle_exception
+    async def clear_finished_tasks(self):
+        return await self._server.clear_finished_tasks()

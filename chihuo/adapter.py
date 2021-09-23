@@ -59,6 +59,22 @@ class Wrapper(ABC):
         """Set the task which has the key to unfinished"""
         raise NotImplementedError
 
+    @abstractmethod
+    async def clear_unfinished_tasks(self):
+        """Clear all unfinished tasks from the queue"""
+        raise NotImplementedError
+
+    @abstractmethod
+    async def clear_finished_tasks(self):
+        """Clear all finished tasks"""
+        raise NotImplementedError
+
+    async def clear_all(self):
+        """Clear all unfinished and finished tasks"""
+
+        await self.clear_unfinished_tasks()
+        await self.clear_finished_tasks()
+
 
 class LodisWrapper(Wrapper):
     def __init__(self, namespace, ip, port, loop=None):
@@ -99,3 +115,9 @@ class LodisWrapper(Wrapper):
 
     async def unfinish(self, key):
         return await self._lodis.hdel(key)
+
+    async def clear_unfinished_tasks(self):
+        return await self._lodis.arm()
+
+    async def clear_finished_tasks(self):
+        return await self._lodis.hrm()
