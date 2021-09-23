@@ -1,7 +1,7 @@
 [tool.poetry]
 name = "chihuo"
 homepage = "https://github.com/PeterDing/chihuo"
-version = "0.2.3"
+version = "0.2.4"
 description = "chihuo: An Asynchronous Task Running Engine"
 authors = ["PeterDing <dfhayst@gmail.com>"]
 license = "MIT"

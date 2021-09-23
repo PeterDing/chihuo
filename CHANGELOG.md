@@ -1,5 +1,15 @@
 # Changelog
 
+## v0.2.4 - 2021-09-23
+
+### Added
+
+Add `chihuo.adapter.Wrapper` methods:
+
+- `clear_finished_tasks` to clear all unfinished tasks in the queue
+- `clear_unfinished_tasks` to clear all finished tasks
+- `clear_all` to clear all unfinished and finished tasks
+
 ## v0.2.3 - 2021-09-22
 
 ### Added
