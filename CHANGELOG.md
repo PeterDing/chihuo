@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.2.5 - 2021-10-22
+
+### Changed
+
+- Update `lodis-py` to `0.2.1`
+
 ## v0.2.4 - 2021-09-23
 
 ### Added
