@@ -209,6 +209,11 @@ Initiate %s loop:
                 resp = await self._server.size()
                 size = resp.value()
                 if size == 0:
+                    logger.info(
+                        "`run_forever = %s`: It is the end. "
+                        "There is no running tasks and the queue is empty.",
+                        self._run_forever,
+                    )
                     self._loop.stop()
 
     async def add_task(
