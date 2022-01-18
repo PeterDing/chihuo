@@ -37,6 +37,6 @@ def run(*classes_or_instances):
     set_signal_handlers(factories, loop)
 
     for factory in factories:
-        factory._run()
+        factory._run_()
 
     loop.run_forever()
