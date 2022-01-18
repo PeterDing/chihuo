@@ -1,3 +1,4 @@
+from typing import Union, Dict, Tuple, Optional, Any, cast
 import traceback
 import logging
 import asyncio
@@ -5,7 +6,7 @@ import json as stdjson
 import types
 
 from .server import Server
-from .common import SERVER_DEFAULT_CONFIG_PATH, ChihuoType, Direction
+from .common import SERVER_DEFAULT_CONFIG_PATH, TaskType, TaskId, Direction
 from .config import parse_server_config
 from .util import serialize_json
 
@@ -42,11 +43,11 @@ class ChihuoLoop:
         Default is the path 'chdb.config'
     """
 
-    NAME = None
-    CONCURRENCY = 1
-    SERVER_CONFIG = SERVER_DEFAULT_CONFIG_PATH
+    NAME: Optional[str] = None
+    CONCURRENCY: int = 1
+    SERVER_CONFIG: Union[str, Any] = SERVER_DEFAULT_CONFIG_PATH
 
-    def __init__(self, run_forever=True):
+    def __init__(self, run_forever: bool = True):
         if not self.NAME:
             logger.warning("NAME is missing")
 
@@ -59,7 +60,7 @@ Initiate %s loop:
     NAME: %s
     CONCURRENCY: %s
     SERVER_CONFIG: %s""",
-            self.__clz_name,
+            self._cls_name,
             self.NAME,
             self.CONCURRENCY,
             self.SERVER_CONFIG,
@@ -72,8 +73,8 @@ Initiate %s loop:
         self._server = Server(self.NAME, self._server_config, loop=self._loop)
         self._semaphore = asyncio.locks.Semaphore(self.CONCURRENCY, loop=self._loop)
 
-        # Running task ids cache
-        self._task_ids = set()
+        # Running tasks cache
+        self._running_tasks: Dict[TaskId, Any] = {}
 
         # Count the running tasks
         self._lock = asyncio.Lock()
@@ -82,12 +83,13 @@ Initiate %s loop:
         self._stop = False
         self._run_forever = run_forever
 
+    @classmethod
     @property
-    def __clz_name(self):
-        return self.__class__.__name__
+    def _cls_name(cls) -> str:
+        return cls.__name__
 
     @property
-    def stop(self):
+    def stop(self) -> bool:
         return self._stop
 
     @stop.setter
@@ -95,50 +97,53 @@ Initiate %s loop:
         self._stop = val
 
     @property
-    def concurrency(self):
+    def concurrency(self) -> int:
         return self._concurrency
 
     @concurrency.setter
-    def concurrency(self, concurrency):
+    def concurrency(self, concurrency: int):
         self._concurrency = concurrency
         self._semaphore = asyncio.locks.Semaphore(self.CONCURRENCY, loop=self._loop)
 
-    def _create_task(self, task, task_type=None):
+    def _create_task(self, task, task_type: TaskType = None) -> asyncio.Task:
         """Wrap `loop.create_task`
         We add an id to task if `task_id` is not None
         """
 
-        future = self._loop.create_task(task)
-        future.ch_name = self.NAME
-        future.ch_type = task_type
-        return future
+        task_name: Optional[str] = None
+        if task_type:
+            task_name = task_type.value
 
-    def _cache_task_id(self, task_id):
-        """Cache running tasks' ids"""
-        self._task_ids.add(task_id)
+        return self._loop.create_task(task, name=task_name)
 
-    def _uncache_task_id(self, task_id):
-        """Remove running tasks' ids from cache"""
-        try:
-            self._task_ids.remove(task_id)
-        except KeyError:
-            pass
+    def _cache_task(self, task_id: TaskId, task: Any) -> None:
+        """Cache running task"""
 
-    async def make_task(self, task_id, task):
+        self._running_tasks[task_id] = task
+
+    def _uncache_task(self, task_id: TaskId) -> None:
+        """Remove running task from cache"""
+
+        self._running_tasks.pop(task_id, None)
+
+    async def make_task(self, task_id: TaskId, task: Any) -> None:
         """This function is the procedure of a task.
 
         The function must be implemented for handling every tasks
         """
 
-        logger.error("%s: make_task is not implemented", self.__clz_name)
+        logger.error("%s: make_task is not implemented", self._cls_name)
         raise NotImplementedError("ChihuoLoop.make_task must be implemented")
 
-    async def next_task(self):
+    async def next_task(self) -> Optional[Tuple[TaskId, Any]]:
+        """Get next task from backend"""
+
         async with self._lock:
             resp = await self._server.pop_left()
             value = resp.value()
             if not value:
-                return None, None
+                return None
+            value = cast(Tuple[TaskId, Union[str, bytes]], value)
 
             self._running_tasks_count += 1
 
@@ -146,32 +151,35 @@ Initiate %s loop:
         task = stdjson.loads(raw_task)
         return task_id, task
 
-    async def _task_loop(self):
-        """Main loop"""
+    async def _task_loop(self) -> None:
+        """Main Task loop
+
+        The loop pops tasks from backend to execute asynchronously.
+        """
 
         while True:
-            # Stop the loop
-            if self._stop:
-                logger.debug("%s: task_loop stop", self.__clz_name)
-                return
-
             await self._semaphore.acquire()
 
-            task_id, task = await self.next_task()
-            if task_id is None and task is None:
+            # Stop the loop
+            if self._stop:
+                logger.info("%s: task_loop stop", self._cls_name)
+                self._release()
+                return
+
+            item = await self.next_task()
+            if item:
+                task_id, task = item
+                future = self._create_task(
+                    self._wrap_task(task_id, task), task_type=TaskType.Task
+                )
+                self._cache_task(task_id, task)
+                future.add_done_callback(lambda _: self._uncache_task(task_id))
+            else:
                 await self.sleep(1)
                 # Release the task
                 self._release()
-                continue
 
-            future = self._create_task(
-                self._wrap_task(task_id, task), task_type=ChihuoType.Task
-            )
-            self._cache_task_id(task_id)
-            future.add_done_callback(lambda _: self._uncache_task_id(task_id))
-            future.ch_task = (task_id, task)
-
-    async def _wrap_task(self, task_id, task):
+    async def _wrap_task(self, task_id: TaskId, task: Any) -> None:
         """Wrap task
         Handle `asyncio.CancelledError`
 
@@ -180,23 +188,18 @@ Initiate %s loop:
 
         try:
             await self.make_task(task_id, task)
-        except asyncio.CancelledError:
-            await self.add_task(
-                (task_id, task), ignore_running=False, direction=Direction.Reverse
-            )
-            logger.error("task fail: %s: CancelledError: %s", self.__clz_name, task)
         except Exception as err:
             await self.add_task(
                 (task_id, task), ignore_running=False, direction=Direction.Reverse
             )
             logger.error(
                 "task fail: %s, task_id: %s, task: %s, error: %s, traceback: %s",
-                self.__clz_name,
+                self._cls_name,
                 task_id,
                 task,
                 err,
                 traceback.format_exc(),
-            )  # yapf: disable
+            )
         finally:
             # Release the semaphore for a completed task
             self._release()
@@ -217,8 +220,12 @@ Initiate %s loop:
                     self._loop.stop()
 
     async def add_task(
-        self, *pairs, finished=True, ignore_running=False, direction=Direction.Forward
-    ):
+        self,
+        *pairs: Tuple[TaskId, Any],
+        finished: bool = True,
+        ignore_running: bool = False,
+        direction: Direction = Direction.Forward
+    ) -> None:
         """Add a task to backend server
 
         `pairs`: [(task_id1, task1), (task_id2, task2), ...]
@@ -243,38 +250,50 @@ Initiate %s loop:
 
         if ignore_running:
             # Remove these tasks which is running
-            pairs = [pair for pair in pairs if pair[0] not in self._task_ids]
+            pairs = tuple(pair for pair in pairs if pair[0] not in self._running_tasks)
 
         if finished:
             unfinished_pairs = []
-            for (task_id, task) in pairs:
+            for task_id, task in pairs:
                 resp = await self._server.finished(task_id)
                 if not resp.value():
                     unfinished_pairs.append((task_id, task))
-            pairs = unfinished_pairs
+            pairs = tuple(unfinished_pairs)
 
         if not pairs:
             return
 
         # Serialize tasks
-        pairs = [(task_id, serialize_json(task)) for task_id, task in pairs]
+        pairs = tuple((task_id, serialize_json(task)) for task_id, task in pairs)
 
         if direction == Direction.Forward:
             await self._server.pushnx(*pairs)
         else:
             await self._server.pushnx_left(*pairs)
 
-    async def task_finish(self, task_id):
-        logger.info("%s: task_finish: %s", self.__clz_name, task_id)
+    async def task_finish(self, task_id: TaskId) -> None:
+        """Set the task as finished
+
+        If a task is set as finished, it CAN NOT be added to the backend at next time.
+        """
+
+        logger.info("%s: task_finish: %s", self._cls_name, task_id)
 
         await self._server.finish(task_id)
 
-    async def task_unfinish(self, task_id):
-        logger.info("%s: task_unfinish: %s", self.__clz_name, task_id)
+    async def task_unfinish(self, task_id: TaskId) -> None:
+        """Set the task as unfinished
+
+        If a task is set as unfinished, it CAN be added to the backend at next time.
+        """
+
+        logger.info("%s: task_unfinish: %s", self._cls_name, task_id)
 
         await self._server.unfinish(task_id)
 
-    def _release(self):
+    def _release(self) -> None:
+        """Release the semaphore"""
+
         self._semaphore.release()
 
     def length(self):
@@ -282,45 +301,16 @@ Initiate %s loop:
 
         return self._concurrency - self._semaphore._value
 
-    async def sleep(self, second):
+    async def sleep(self, second) -> None:
         await asyncio.sleep(second, loop=self._loop)
 
-    def _sendback_and_cancel_tasks(self):
-        logger.info("%s: sendback and cancel tasks", self.__clz_name)
+    def _run_(self):
+        """The main function to run the factory"""
 
-        pairs = []
-        tasks = asyncio.all_tasks(self._loop)
-        for task in tasks:
-            if (
-                getattr(task, "ch_name", None) == self.NAME
-                and task.ch_type == ChihuoType.Task
-            ):
-                # Remove cached tasks' id
-                # Here, tasks' id are in cache, we need to remove them out cache,
-                # then, send back tasks to backend
-                self._uncache_task_id(task.ch_task[0])
+        logger.info("%s runs", self._cls_name)
 
-                pairs.append(task.ch_task)
-                task.cancel()
+        start = getattr(self, "start", None)
+        if start and isinstance(start, types.MethodType):
+            self._create_task(start(), task_type=TaskType.Start)
 
-        if not pairs:
-            logger.info("%s: No find tasks", self.__clz_name)
-            return
-
-        self._create_task(self._sendback_tasks(pairs), task_type=ChihuoType.SendBack)
-
-    async def _sendback_tasks(self, pairs):
-        logger.info("%s: sendback tasks", self.__clz_name)
-        logger.info("%s: sendback_task: tasks: %s", self.__clz_name, pairs)
-
-        await self.add_task(*pairs, direction=Direction.Reverse)
-
-        logger.info("%s: sendback_task has done", self.__clz_name)
-
-    def _run(self):
-        logger.info("%s: run", self.__clz_name)
-
-        if hasattr(self, "start") and isinstance(self.start, types.MethodType):
-            self._create_task(self.start(), task_type=ChihuoType.Start)
-
-        self._create_task(self._task_loop(), task_type=ChihuoType.TaskLoop)
+        self._create_task(self._task_loop(), task_type=TaskType.TaskLoop)
