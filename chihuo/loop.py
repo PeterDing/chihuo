@@ -139,8 +139,7 @@ Initiate %s loop:
         """Get next task from backend"""
 
         async with self._lock:
-            resp = await self._server.pop_left()
-            value = resp.value()
+            value = await self._server.pop_left()
             if not value:
                 return None
             value = cast(Tuple[TaskId, Union[str, bytes]], value)
@@ -209,8 +208,7 @@ Initiate %s loop:
 
             # The end event: running tasks is empty and the task queue is empty
             if not self._run_forever and self._running_tasks_count == 0:
-                resp = await self._server.size()
-                size = resp.value()
+                size = await self._server.size()
                 if size == 0:
                     logger.info(
                         "`run_forever = %s`: It is the end. "
@@ -255,8 +253,8 @@ Initiate %s loop:
         if finished:
             unfinished_pairs = []
             for task_id, task in pairs:
-                resp = await self._server.finished(task_id)
-                if not resp.value():
+                v = await self._server.finished(task_id)
+                if not v:
                     unfinished_pairs.append((task_id, task))
             pairs = tuple(unfinished_pairs)
 
@@ -290,6 +288,16 @@ Initiate %s loop:
         logger.info("%s: task_unfinish: %s", self._cls_name, task_id)
 
         await self._server.unfinish(task_id)
+
+    async def task_finished(self, task_id: TaskId) -> bool:
+        """Check if the task is finished"""
+
+        return await self._server.finished(task_id)
+
+    async def task_exists(self, task_id: TaskId) -> bool:
+        """Check if the task exists"""
+
+        return await self._server.exists(task_id)
 
     def _release(self) -> None:
         """Release the semaphore"""
