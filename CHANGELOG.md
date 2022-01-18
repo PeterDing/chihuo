@@ -1,5 +1,26 @@
 # Changelog
 
+## v0.3.0 - 2022-01-18
+
+### Added
+
+- Add type hints
+- Add `ChihuoLoop.task_finished` and `ChihuoLoop.task_exists`
+- Add `name` option for `loop.create_task`
+- Add log at end when `ChihuoLoop._run_forever` to be False
+
+### Changed
+
+- Change `ChihuoLoop._run` to `ChihuoLoop._run_`
+- Release `semaphore` after `ChihuoLoop.stop` set to True
+- Change `ChihuoType` name as `TaskType`; Use `Enum` for `TaskType`
+- Handle INT and TERM signals as following steps:
+
+  1. Set `factory.stop` to True
+  2. Cancel all running tasks except the `TaskType.Final` and `TaskType.TaskLoop` tasks.
+  3. Cancel all `TaskType.TaskLoop` tasks except the `TaskType.Final`
+  4. Stop the loop
+
 ## v0.2.5 - 2021-10-22
 
 ### Changed
