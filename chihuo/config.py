@@ -1,16 +1,17 @@
+from typing import Dict, Union
 import os
 
 
 class ServerConfig:
     __slots__ = ["backend", "ip", "port"]
 
-    def __init__(self, backend, ip, port):
+    def __init__(self, backend: str, ip: str, port: Union[str, int]):
         self.backend = backend
         self.ip = ip
         self.port = port
 
 
-def parse_server_config(config):
+def parse_server_config(config: Union[Dict, str]) -> ServerConfig:
     if isinstance(config, dict):
         return ServerConfig(config["backend"], config["ip"], config["port"])
     if not (isinstance(config, str) and os.path.exists(config)):

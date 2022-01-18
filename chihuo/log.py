@@ -1,3 +1,4 @@
+from typing import IO, Union
 import os
 import logging
 
@@ -6,14 +7,16 @@ DEFAULT_FILENAME = "log/log.log"
 
 
 def get_logger(
-    name=None,
-    fmt=DEFAULT_FMT,
-    filename=DEFAULT_FILENAME,
-    stream=None,
-    level=logging.INFO,
+    name: str = None,
+    fmt: str = DEFAULT_FMT,
+    filename: str = DEFAULT_FILENAME,
+    stream: IO[str] = None,
+    level: int = logging.INFO,
 ):
     logger = logging.getLogger(name)
     logger.setLevel(level)
+
+    handler: Union[logging.StreamHandler, logging.FileHandler]
 
     if filename:
         dirt = os.path.dirname(filename)

@@ -1,18 +1,17 @@
+from typing import Any
 import types
-
 import json
+import asyncio
 
-from asyncio.queues import Queue
 
-
-def make_ctrl_queue(concurrency, loop=None):
-    queue = Queue(concurrency, loop=loop)
+def make_ctrl_queue(concurrency: int, loop: asyncio.AbstractEventLoop = None):
+    queue: asyncio.Queue = asyncio.Queue(concurrency, loop=loop)
     for _ in range(concurrency):
         queue._put(1)
     return queue
 
 
-def serialize_json(task):
+def serialize_json(task: Any):
     return json.dumps(task, separators=(",", ":"), ensure_ascii=False)
 
 
