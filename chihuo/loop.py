@@ -83,10 +83,9 @@ Initiate %s loop:
         self._stop = False
         self._run_forever = run_forever
 
-    @classmethod
     @property
-    def _cls_name(cls) -> str:
-        return cls.__name__
+    def _cls_name(self) -> str:
+        return self.__class__.__name__
 
     @property
     def stop(self) -> bool:
