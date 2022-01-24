@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.3.1 - 2022-01-24
+
+### Fixed
+
+- Be compatible for Python3.8
+
 ## v0.3.0 - 2022-01-18
 
 ### Added
