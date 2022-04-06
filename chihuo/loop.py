@@ -167,11 +167,10 @@ Initiate %s loop:
             item = await self.next_task()
             if item:
                 task_id, task = item
-                future = self._create_task(
+                self._cache_task(task_id, task)
+                self._create_task(
                     self._wrap_task(task_id, task), task_type=TaskType.Task
                 )
-                self._cache_task(task_id, task)
-                future.add_done_callback(lambda _: self._uncache_task(task_id))
             else:
                 await self.sleep(1)
                 # Release the task
@@ -181,24 +180,30 @@ Initiate %s loop:
         """Wrap task
         Handle `asyncio.CancelledError`
 
-        If the task fails, adding task back to backend
+        If the task fails, the task will be sent back to backend
         """
 
         try:
             await self.make_task(task_id, task)
-        except Exception as err:
+        except BaseException as err:
+            # Send task back to the backend
             await self.add_task(
                 (task_id, task), ignore_running=False, direction=Direction.Reverse
             )
-            logger.error(
-                "task fail: %s, task_id: %s, task: %s, error: %s, traceback: %s",
-                self._cls_name,
-                task_id,
-                task,
-                err,
-                traceback.format_exc(),
-            )
+            if isinstance(err, asyncio.CancelledError):
+                logger.warning("Cancelled: %s: task_id: %s", self._cls_name, task_id)
+            else:
+                logger.error(
+                    "Task fails: %s: task_id: %s, task: %s, error: %s, traceback: %s",
+                    self._cls_name,
+                    task_id,
+                    task,
+                    err,
+                    traceback.format_exc(),
+                )
         finally:
+            # Uncache the task
+            self._uncache_task(task_id)
             # Release the semaphore for a completed task
             self._release()
 
