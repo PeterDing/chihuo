@@ -1,10 +1,11 @@
+from typing import Iterable, Optional, Tuple, Dict, Any
 import logging
 import asyncio
 import functools
 import signal
-from typing import Iterable
+import copy
 
-from .common import TaskType, Direction
+from .common import TaskType, TaskId
 from .loop import ChihuoLoop
 
 logger = logging.getLogger(__name__)
@@ -13,14 +14,12 @@ IS_ON_TERM = False
 IS_ON_INT = False
 
 
-async def cancel_all_running_tasks(loop, factories: Iterable[ChihuoLoop] = []) -> None:
+async def cancel_all_running_tasks() -> None:
     """Cancel all running tasks, then send these tasks back to backend"""
 
     while True:
         # Cancel all running async tasks in the loop
-        tasks = [
-            t for t in asyncio.all_tasks(loop) if t.get_name() != TaskType.Final.value
-        ]
+        tasks = [t for t in asyncio.all_tasks() if t.get_name() != TaskType.Final.value]
 
         logger.info("all tasks number: %s", len(tasks))
 
@@ -32,51 +31,65 @@ async def cancel_all_running_tasks(loop, factories: Iterable[ChihuoLoop] = []) -
 
         if len(needed_cancel) == 0:
             # Finally, cancel the `ChihuoLoop._task_loop`
-            if len(task_loop) == 0:
-                break
-            else:
-                for task in task_loop:
-                    task.cancel()
+            for task in task_loop:
+                task.cancel()
+            break
 
         await asyncio.sleep(1)
 
-    await sendback_tasks(factories)
+
+async def send_back_running_tasks(
+    factory_and_tasks: Iterable[Tuple[ChihuoLoop, Dict[TaskId, Any]]]
+) -> None:
+    logger.info("[send back task]: START")
+
+    for factory, tasks in factory_and_tasks:
+        for task_id, task in tasks.items():
+            logger.info(
+                "[Send back task]: factory: %s, task: %s",
+                factory.__class__.__name__,
+                (task_id, task),
+            )
+            await factory.add_task((task_id, task))
+
+    logger.info("[send back task]: END")
+
+
+async def teardown(
+    factories: Iterable[ChihuoLoop], loop: asyncio.AbstractEventLoop
+) -> None:
+    logger.info("[teardown]: START")
+
+    # Send back running tasks
+    running_tasks = [
+        (factory, copy.deepcopy(factory._running_tasks)) for factory in factories
+    ]
+    await send_back_running_tasks(running_tasks)
+
+    # Spawn the final task
+    await cancel_all_running_tasks()
 
     loop.stop()
 
-
-async def sendback_tasks(factories: Iterable[ChihuoLoop]) -> None:
-    """Send all tasks in `ChihuoLoop._running_tasks` to backend"""
-
-    for factory in factories:
-        factory_name = factory.__class__.__name__
-        pairs = list(factory._running_tasks.items())
-        logger.info("%s: sendback tasks", factory_name)
-        logger.info("%s: sendback_task: tasks: %s", factory_name, pairs)
-
-        for pair in pairs:
-            await factory.add_task(pair, direction=Direction.Reverse)
-
-        logger.info("%s: sendback_task has done", factory_name)
+    logger.info("[teardown]: END")
 
 
-def handle_stop_and_send(
+def handle_stop(
     signum,
     frame,
     factories: Iterable[ChihuoLoop] = [],
-    loop: asyncio.AbstractEventLoop = None,
+    loop: Optional[asyncio.AbstractEventLoop] = None,
 ) -> None:
     """The handler of INT and TERM signals
 
     First, we set all factories to be stoped at next event loop.
-    Then, we cancel all running tasks and send them to backend.
+    Then, we cancel all running tasks which will be sent back to backend.
     """
 
     assert loop, "The Event Loop can not be None"
 
-    logger.info("handle signal %s: handle_stop_and_send", signum)
+    logger.info("[handle_stop]: signal: %s", signum)
 
-    global IS_ON_TERM
     global IS_ON_INT
     if IS_ON_TERM or IS_ON_INT:
         return
@@ -85,9 +98,7 @@ def handle_stop_and_send(
     for factory in factories:
         factory.stop = True
 
-    # Spawn the final task
-    final_task = cancel_all_running_tasks(loop, factories)
-    loop.create_task(final_task, name=TaskType.Final.value)
+    loop.create_task(teardown(factories, loop), name=TaskType.Final.value)
 
     IS_ON_INT = True
 
@@ -99,10 +110,9 @@ def set_signal_handlers(
 
     signal.signal(
         signal.SIGTERM,
-        functools.partial(handle_stop_and_send, factories=factories, loop=loop),
-        # functools.partial(wait_for_tasks, factories=factories, loop=loop),
+        functools.partial(handle_stop, factories=factories, loop=loop),
     )
     signal.signal(
         signal.SIGINT,
-        functools.partial(handle_stop_and_send, factories=factories, loop=loop),
+        functools.partial(handle_stop, factories=factories, loop=loop),
     )
