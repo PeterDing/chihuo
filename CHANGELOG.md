@@ -1,5 +1,20 @@
 # Changelog
 
+## v0.3.2 - 2022-04-06
+
+### Changed
+
+- Handle `asyncio.CancelledError`
+
+  If capturing the `asyncio.CancelledError`, sending back the task to backend.
+
+- Handle signal by following steps:
+
+  1. send back all running tasks
+  2. cancel all running tasks
+  3. stop the running loop
+  4. exit
+
 ## v0.3.1 - 2022-01-24
 
 ### Fixed
