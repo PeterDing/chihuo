@@ -1,5 +1,14 @@
 # Changelog
 
+## v0.3.3 - 2022-04-07
+
+### Added
+
+- Keep event loop alive
+
+  Event loop could be dead if all tasks are keeping.
+  The task keeps event loop to listen for events. Because it be woke up periodically.
+
 ## v0.3.2 - 2022-04-06
 
 ### Changed
