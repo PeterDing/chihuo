@@ -7,11 +7,19 @@ from .signal_handlers import set_signal_handlers
 logger = logging.getLogger(__name__)
 
 
-def run(*classes_or_instances):
-    if not classes_or_instances:
-        logger.error("No provide factory class or instance")
+async def _event_alive():
+    """Keep event loop alive
 
-    assert classes_or_instances, "No provide factory class or instance"
+    Event loop could be dead if all tasks are keeping.
+    The task keeps event loop to listen for events. Because it be woke up periodically.
+    """
+
+    while True:
+        await asyncio.sleep(1)
+
+
+def _instantiate_factories(*classes_or_instances):
+    """Instantiate factories"""
 
     factories = []
     for obj in classes_or_instances:
@@ -30,12 +38,28 @@ def run(*classes_or_instances):
                 raise TypeError("factory.NAME must be given")
 
             factories.append(obj())
+    return factories
 
-    logger.info("Find factories: %s", [factory.NAME for factory in factories])
+
+def run(*classes_or_instances):
+    """Instantiate factories and run them"""
+
+    if not classes_or_instances:
+        logger.error("No provide factory class or instance")
+
+    assert classes_or_instances, "No provide factory class or instance"
 
     loop = asyncio.get_event_loop()
+
+    # Keep event loop alive
+    loop.create_task(_event_alive())
+
+    factories = _instantiate_factories(*classes_or_instances)
+    logger.info("Find factories: %s", [factory.NAME for factory in factories])
+
     set_signal_handlers(factories, loop)
 
+    # Run factories
     for factory in factories:
         factory._run_()
 
