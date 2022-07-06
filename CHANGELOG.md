@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.3.4 - 2022-07-06
+
+### Changed
+
+- Send back user interrupted tasks to the head of the queue.
+
 ## v0.3.3 - 2022-04-07
 
 ### Added
