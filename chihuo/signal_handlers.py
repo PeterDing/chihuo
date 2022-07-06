@@ -5,7 +5,7 @@ import functools
 import signal
 import copy
 
-from .common import TaskType, TaskId
+from .common import TaskType, TaskId, Direction
 from .loop import ChihuoLoop
 
 logger = logging.getLogger(__name__)
@@ -50,7 +50,7 @@ async def send_back_running_tasks(
                 factory.__class__.__name__,
                 (task_id, task),
             )
-            await factory.add_task((task_id, task))
+            await factory.add_task((task_id, task), direction=Direction.Reverse)
 
     logger.info("[send back task]: END")
 
