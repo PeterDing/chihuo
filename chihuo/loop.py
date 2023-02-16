@@ -45,33 +45,43 @@ class ChihuoLoop:
 
     NAME: Optional[str] = None
     CONCURRENCY: int = 1
-    SERVER_CONFIG: Union[str, Any] = SERVER_DEFAULT_CONFIG_PATH
+    SERVER_CONFIG: Union[str, Dict] = SERVER_DEFAULT_CONFIG_PATH
 
-    def __init__(self, run_forever: bool = True):
-        if not self.NAME:
-            logger.warning("NAME is missing")
+    def __init__(
+        self,
+        name: Optional[str] = None,
+        concurrency: Optional[int] = None,
+        server_config: Union[str, Dict, None] = None,
+        run_forever: bool = True,
+    ):
+        name = name or self.NAME
+        concurrency = concurrency or self.CONCURRENCY
+        server_config = server_config or self.SERVER_CONFIG
 
-        assert self.NAME, "NAME is missing"
-        assert self.CONCURRENCY > 0, "CONCURRENCY must be > 0"
+        if not name:
+            logger.warning("name is missing")
+
+        assert name, "name is missing"
+        assert concurrency > 0, "concurrency must be > 0"
 
         logger.info(
             """
 Initiate %s loop:
-    NAME: %s
-    CONCURRENCY: %s
-    SERVER_CONFIG: %s""",
+    Name: %s
+    Concurrency: %s
+    Server config: %s""",
             self._cls_name,
-            self.NAME,
-            self.CONCURRENCY,
-            self.SERVER_CONFIG,
+            name,
+            concurrency,
+            server_config,
         )
 
-        self._concurrency = self.CONCURRENCY
+        self._server_config = parse_server_config(server_config)
+
         self._loop = asyncio.get_event_loop()
 
-        self._server_config = parse_server_config(self.SERVER_CONFIG)
-        self._server = Server(self.NAME, self._server_config, loop=self._loop)
-        self._semaphore = asyncio.locks.Semaphore(self.CONCURRENCY, loop=self._loop)
+        self._server = Server(name, self._server_config, loop=self._loop)
+        self._semaphore = asyncio.locks.Semaphore(concurrency, loop=self._loop)
 
         # Running tasks cache
         self._running_tasks: Dict[TaskId, Any] = {}
@@ -82,6 +92,9 @@ Initiate %s loop:
 
         self._stop = False
         self._run_forever = run_forever
+
+        self._name = name
+        self._concurrency = concurrency
 
     @property
     def _cls_name(self) -> str:
@@ -102,7 +115,7 @@ Initiate %s loop:
     @concurrency.setter
     def concurrency(self, concurrency: int):
         self._concurrency = concurrency
-        self._semaphore = asyncio.locks.Semaphore(self.CONCURRENCY, loop=self._loop)
+        self._semaphore = asyncio.locks.Semaphore(concurrency, loop=self._loop)
 
     def _create_task(self, task, task_type: TaskType = None) -> asyncio.Task:
         """Wrap `loop.create_task`
