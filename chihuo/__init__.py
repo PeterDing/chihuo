@@ -2,6 +2,7 @@ from .loop import ChihuoLoop
 from .core import run
 from .common import Direction
 
-__version__ = "0.3.4"
 
 __all__ = ["ChihuoLoop", "run", "Direction"]
+
+__version__ = "0.4.0"

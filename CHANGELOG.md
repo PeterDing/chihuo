@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.4.0 - 2023-02-16
+
+### Added
+
+- Support to set `name`, `concurrency`, `server_config` at `ChihuoLoop.__init__`.
+
 ## v0.3.4 - 2022-07-06
 
 ### Changed
